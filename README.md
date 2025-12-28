@@ -1,0 +1,2 @@
+# App_Updata_For_Github
+一个部署在GitHub上自动获取iOS应用更新的任务。
