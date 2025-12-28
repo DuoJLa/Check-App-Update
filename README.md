@@ -104,6 +104,8 @@
 
 ## ⏰ **检查频率设置**
 
+默认每4小时检查一次「请勿将数值设置过小，以免滥用资源被GitHub停用」
+
 编辑 `.github/workflows/check-app-update.yml` 中的 `cron`：
 
 ```
