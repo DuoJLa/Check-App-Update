@@ -27,11 +27,11 @@ REGIONS = [
     'it',  # 意大利
     'es',  # 西班牙
     'ru',  # 俄罗斯
-    'br': '巴西',
-    'mx': '墨西哥',
-    'in': '印度',
-    'th': '泰国',
-    'vn': '越南',
+    'br',  # 巴西
+    'mx',  # 墨西哥
+    'in',  # 印度
+    'th',  # 泰国
+    'vn',  # 越南
 ]
 
 # 地区名称映射（中文）
@@ -75,7 +75,6 @@ def load_version_cache():
     try:
         with open(CACHE_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # 确保是字典
             if isinstance(data, dict):
                 return data
             return {}
@@ -88,8 +87,11 @@ def load_version_cache():
 
 def save_version_cache(cache):
     """保存版本缓存到缓存库"""
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    try:
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"保存缓存库失败: {e}")
 
 
 def get_app_info_with_region(app_id):
@@ -102,14 +104,15 @@ def get_app_info_with_region(app_id):
                 'id': app_id,
                 'country': region
             }
-            response = requests.get(ITUNES_API, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('resultCount', 0) > 0:
-                    app_info = data['results'][0]
-                    app_info['detected_region'] = region  # 记录找到的地区
-                    print(f"✓ 在 {REGION_NAMES.get(region, region)} App Store 找到应用")
-                    return app_info
+            resp = requests.get(ITUNES_API, params=params, timeout=10)
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            if data.get('resultCount', 0) > 0:
+                app_info = data['results'][0]
+                app_info['detected_region'] = region
+                print(f"✓ 在 {REGION_NAMES.get(region, region)} App Store 找到应用")
+                return app_info
         except Exception as e:
             print(f"查询地区 {region} 时出错: {e}")
             continue
@@ -120,6 +123,8 @@ def get_app_info_with_region(app_id):
 
 def format_datetime(iso_datetime):
     """格式化ISO 8601时间为易读格式（本地时间）"""
+    if not iso_datetime:
+        return "未知"
     try:
         dt = datetime.fromisoformat(iso_datetime.replace('Z', '+00:00'))
         local_dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
@@ -143,12 +148,11 @@ def send_bark_notification(bark_key, title, content, url=None, icon_url=None):
         if icon_url:
             data["icon"] = icon_url
 
-        response = requests.post(f"{BARK_API}/{bark_key}", data=data, timeout=10)
-        if response.status_code == 200:
+        resp = requests.post(f"{BARK_API}/{bark_key}", data=data, timeout=10)
+        if resp.status_code == 200:
             print("✅ Bark推送成功")
             return True
-        else:
-            print(f"❌ Bark推送失败，状态码: {response.status_code}")
+        print(f"❌ Bark推送失败，状态码: {resp.status_code}, 响应: {resp.text}")
     except Exception as e:
         print(f"❌ Bark推送失败: {e}")
     return False
@@ -166,14 +170,12 @@ def send_telegram_notification(bot_token, chat_id, title, content):
             "disable_web_page_preview": False
         }
 
-        response = requests.post(api_url, json=payload, timeout=10)
-        result = response.json()
-
+        resp = requests.post(api_url, json=payload, timeout=10)
+        result = resp.json()
         if result.get('ok'):
             print("✅ Telegram推送成功")
             return True
-        else:
-            print(f"❌ Telegram推送失败: {result.get('description', '未知错误')}")
+        print(f"❌ Telegram推送失败: {result.get('description', '未知错误')}")
     except Exception as e:
         print(f"❌ Telegram推送失败: {e}")
     return False
@@ -184,46 +186,39 @@ def send_notification(title, content, url=None, icon_url=None):
     push_method = get_push_method()
 
     if push_method == 'telegram':
-        telegram_config = get_telegram_config()
-        bot_token = telegram_config['bot_token']
-        chat_id = telegram_config['chat_id']
-
-        if not bot_token or not chat_id:
+        cfg = get_telegram_config()
+        if not cfg['bot_token'] or not cfg['chat_id']:
             print("❌ 错误: 未设置TELEGRAM_BOT_TOKEN或TELEGRAM_CHAT_ID")
             return False
+        return send_telegram_notification(cfg['bot_token'], cfg['chat_id'], title, content)
 
-        return send_telegram_notification(bot_token, chat_id, title, content)
-
-    elif push_method == 'bark':
+    if push_method == 'bark':
         bark_key = get_bark_key()
-
         if not bark_key:
             print("❌ 错误: 未设置BARK_KEY")
             return False
-
         return send_bark_notification(bark_key, title, content, url, icon_url)
 
-    else:
-        print(f"❌ 错误: 不支持的推送方式 '{push_method}'，请使用 'bark' 或 'telegram'")
-        return False
+    print(f"❌ 错误: 不支持的推送方式 '{push_method}'，请使用 'bark' 或 'telegram'")
+    return False
 
 
 def check_updates():
     """
     检查应用更新：
 
-    - 如果缓存库为空：视为首次运行：
+    - 缓存库为空 → 首次运行：
         * 拉取所有 App 当前版本信息写入缓存库
         * 推送一条「初始化」通知，内容为所有 App 的当前版本
-    - 如果缓存库已有数据：只推送版本号发生变化的 App
+    - 缓存库非空 → 后续运行：
+        * 对比版本，只推送版本变化的 App
     """
     app_ids = get_app_ids()
-    push_method = get_push_method()
-
     if not app_ids:
         print("❌ 错误: 未设置APP_IDS")
         return
 
+    push_method = get_push_method()
     print(f"📢 推送方式: {push_method.upper()}")
     print(f"📱 监控应用数量: {len(app_ids)}")
     print("=" * 60)
@@ -233,14 +228,12 @@ def check_updates():
     if is_first_run:
         print("🆕 检测到缓存库为空，本次视为首次运行，将初始化所有应用版本信息。")
 
-    updated_apps = []      # 非首次运行：存储“有更新”的应用
-    all_current_apps = []  # 首次运行：存储“所有应用当前状态”
+    updated_apps = []      # 非首次运行：有更新的应用
+    all_current_apps = []  # 首次运行：所有应用当前状态
 
-    # 遍历所有 App
     for app_id in app_ids:
         print(f"\n🔍 检查应用: {app_id}")
         app_info = get_app_info_with_region(app_id)
-
         if not app_info:
             print("⚠️  无法获取应用信息")
             continue
@@ -254,11 +247,11 @@ def check_updates():
         region_name = REGION_NAMES.get(region, region.upper())
         app_icon = app_info.get('artworkUrl100', '')  # 图标URL [web:31][web:40]
 
-        formatted_date = format_datetime(release_date) if release_date else '未知'
+        formatted_date = format_datetime(release_date)
         cached_version = cache.get(app_id, {}).get('version', '')
 
         if is_first_run:
-            # 首次运行：不做版本对比，全部视为“当前版本”
+            # 首次运行：全部写入缓存，并组成初始化列表
             print(f"📝 初始化: {app_name} v{current_version} - {region_name}")
             app_status = {
                 'app_id': app_id,
@@ -272,7 +265,6 @@ def check_updates():
             }
             all_current_apps.append(app_status)
 
-            # 写入缓存库
             cache[app_id] = {
                 'version': current_version,
                 'app_name': app_name,
@@ -281,7 +273,7 @@ def check_updates():
                 'updated_at': datetime.now().isoformat()
             }
         else:
-            # 后续运行：对比版本号
+            # 后续运行：仅对比版本
             if cached_version != current_version:
                 print(f"🎉 检测到更新: {app_name}")
                 print(f"   版本: {cached_version or '无'} -> {current_version}")
@@ -312,9 +304,8 @@ def check_updates():
 
     print("\n" + "=" * 60)
 
-    # 推送逻辑
     if is_first_run:
-        # 首次运行：推送“所有应用当前版本汇总”
+        # 首次运行：推送所有应用当前版本
         if not all_current_apps:
             print("⚠️ 首次运行没有成功获取到任何应用信息，跳过推送。")
             return
@@ -331,8 +322,7 @@ def check_updates():
 
         content = "本次为首次运行，已创建缓存库，当前各应用最新版本如下：\n\n" + "\n".join(parts)
 
-        if get_push_method() == 'bark':
-            # 用第一个应用的图标与链接
+        if push_method == 'bark':
             first_app = all_current_apps[0]
             send_notification(
                 title,
@@ -347,62 +337,60 @@ def check_updates():
             content += f"\n{links}"
             send_notification(title, content)
 
-        # 保存初始化后的缓存库
         save_version_cache(cache)
         print("💾 缓存库已初始化并保存。")
+        return
 
-    else:
-        # 后续运行：只推送“有更新的应用”
-        if not updated_apps:
-            print("😴 所有应用均为最新版本，无需推送。")
-            return
+    # 非首次运行：只推送有更新的应用
+    if not updated_apps:
+        print("😴 所有应用均为最新版本，无需推送。")
+        return
 
-        print(f"\n📦 本次共有 {len(updated_apps)} 个应用有更新。")
+    print(f"\n📦 本次共有 {len(updated_apps)} 个应用有更新。")
 
-        if len(updated_apps) == 1:
-            app = updated_apps[0]
-            title = f"📱 {app['app_name']} 已更新"
-            content = (
-                f"版本: {app['new_version']}\n"
-                f"地区: {app['region']}\n"
-                f"更新时间: {app['release_date']}\n\n"
-                f"更新内容:\n{app['release_notes'][:300]}"
-            )
-            if get_push_method() == 'bark':
-                send_notification(title, content, app['app_url'], app['app_icon'])
-            else:
-                content += f"\n\n🔗 [{app['app_name']}]({app['app_url']})"
-                send_notification(title, content)
+    if len(updated_apps) == 1:
+        app = updated_apps[0]
+        title = f"📱 {app['app_name']} 已更新"
+        content = (
+            f"版本: {app['new_version']}\n"
+            f"地区: {app['region']}\n"
+            f"更新时间: {app['release_date']}\n\n"
+            f"更新内容:\n{app['release_notes'][:300]}"
+        )
+        if push_method == 'bark':
+            send_notification(title, content, app['app_url'], app['app_icon'])
         else:
-            title = f"📱 App Store 更新通知（{len(updated_apps)} 个应用）"
-            parts = []
-            for i, app in enumerate(updated_apps, 1):
-                part = (
-                    f"{i}. *{app['app_name']}* {app['old_version']} → {app['new_version']}\n"
-                    f"   地区: {app['region']} | 更新时间: {app['release_date']}\n"
-                    f"   {app['release_notes'][:100]}{'...' if len(app['release_notes']) > 100 else ''}\n"
-                )
-                parts.append(part)
-            content = "\n".join(parts)
+            content += f"\n\n🔗 [{app['app_name']}]({app['app_url']})"
+            send_notification(title, content)
+    else:
+        title = f"📱 App Store 更新通知（{len(updated_apps)} 个应用）"
+        parts = []
+        for i, app in enumerate(updated_apps, 1):
+            part = (
+                f"{i}. *{app['app_name']}* {app['old_version']} → {app['new_version']}\n"
+                f"   地区: {app['region']} | 更新时间: {app['release_date']}\n"
+                f"   {app['release_notes'][:100]}{'...' if len(app['release_notes']) > 100 else ''}\n"
+            )
+            parts.append(part)
+        content = "\n".join(parts)
 
-            if get_push_method() == 'bark':
-                first_app = updated_apps[0]
-                send_notification(
-                    title,
-                    content,
-                    url=first_app['app_url'],
-                    icon_url=first_app['app_icon']
-                )
-            else:
-                links = "\n".join(
-                    [f"🔗 [{app['app_name']}]({app['app_url']})" for app in updated_apps]
-                )
-                content += f"\n\n{links}"
-                send_notification(title, content)
+        if push_method == 'bark':
+            first_app = updated_apps[0]
+            send_notification(
+                title,
+                content,
+                url=first_app['app_url'],
+                icon_url=first_app['app_icon']
+            )
+        else:
+            links = "\n".join(
+                [f"🔗 [{app['app_name']}]({app['app_url']})" for app in updated_apps]
+            )
+            content += f"\n\n{links}"
+            send_notification(title, content)
 
-        # 保存更新后的缓存库
-        save_version_cache(cache)
-        print("💾 缓存库已更新。")
+    save_version_cache(cache)
+    print("💾 缓存库已更新。")
 
 
 if __name__ == '__main__':
