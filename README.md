@@ -2,7 +2,6 @@
   
 # 🚀 App Store 更新监控器
   
-<img src="https://img.shields.io/badge/状态-🟢运行中-green?style=flat-square" alt="运行中">
 <img src="https://img.shields.io/badge/推送-Bark%20%7C%20Telegram-blue?style=flat-square" alt="推送方式">
 <img src="https://img.shields.io/badge/地区-20%2B区-orange?style=flat-square" alt="智能地区">
 <img src="https://img.shields.io/badge/频率-每小时/可自定义-purple?style=flat-square" alt="检查频率">
