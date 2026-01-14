@@ -1,19 +1,19 @@
-# 🚀 App Store 更新监控器 V1.0
-
 <div align="center">
+  
+# 🚀 App Store 更新监控器
+  
 <img src="https://img.shields.io/badge/状态-🟢运行中-green?style=flat-square" alt="运行中">
 <img src="https://img.shields.io/badge/推送-Bark%20%7C%20Telegram-blue?style=flat-square" alt="推送方式">
 <img src="https://img.shields.io/badge/地区-20%2B区-orange?style=flat-square" alt="智能地区">
 <img src="https://img.shields.io/badge/频率-每小时/可自定义-purple?style=flat-square" alt="检查频率">
-</div>
-
-<br>
 
 **完全托管在GitHub Actions上，自动监控App Store应用更新，智能推送详细版本信息！**
 
+</div>
+
 ## ✨ **核心功能**
 
-| 🎯 **功能** | ✅ **状态** | 📝 **说明** |
+| **功能** | **可用性** | **说明** |
 |-------------|------------|-------------|
 | **自动版本检测** | ✅ | iTunes API实时查询最新版本 |
 | **智能地区识别** | ✅ | 自动匹配20+地区（🇨🇳中国优先） |
@@ -28,7 +28,6 @@
 
 ### **🔥 单个应用更新（详细版）**
 
-标题：🔥 WeChat 有新版本啦！
 ----------------------------------------
 ```
 📱 WeChat（8.0.51→8.0.52） 📱
@@ -188,12 +187,6 @@ TELEGRAM_CHAT_ID=123456789
 
 </details>
 
-## 📈 **版本历史**
-
-| **版本** | **日期** | **更新内容** |
-|----------|----------|--------------|
-| V1.0 | 2025-12 | **详细推送+图标+缓存优化** |
-
 ## ⭐ **Star支持**
 
 喜欢这个项目？请点个 **Star** 支持一下！⭐
@@ -201,5 +194,3 @@ TELEGRAM_CHAT_ID=123456789
 <div align="center">
 <img src="https://img.shields.io/github/stars/yourusername/app-store-monitor?style=social" alt="Stars">
 </div>
-
-*由 [GitHub Actions](https://github.com/features/actions) 驱动 | Made with ❤️ for DuoJla*
